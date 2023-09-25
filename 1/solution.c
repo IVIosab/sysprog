@@ -3,7 +3,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include "libcoro.h"
-#include <malloc.h>
 #include "../utils/heap_help/heap_help.h"
 #include <time.h>
 
@@ -17,20 +16,22 @@ static int *mergeSortArrays(int **arrays, int size); // sort array of sorted arr
 
 struct my_context
 {
-	char *name;			   // filename
-	int **sorted;		   // pointer to sorted array of the file
+	int files;			   // number of files
+	char ***filenames;	   // filenames
+	int ***sortedFiles;	   // array of arrays
 	double quantum;		   // T/N , stored in microseconds
 	struct timespec start; // start time of the coroutine
-	double *workTime;
-	int *switches;
+	double *workTime;	   // work time of the coroutine in microseconds
+	int *switches;		   // number of switches done by the coroutine
 };
 
 static struct my_context *
-my_context_new(const char *name, int **sorted, double quantum, double *workTime, int *switches)
+my_context_new(int files, char ***filenames, int ***sortedFiles, double quantum, double *workTime, int *switches)
 {
 	struct my_context *ctx = malloc(sizeof(*ctx));
-	ctx->name = strdup(name);
-	ctx->sorted = sorted;
+	ctx->files = files;
+	ctx->filenames = filenames;
+	ctx->sortedFiles = sortedFiles;
 	ctx->quantum = quantum;
 	ctx->workTime = workTime;
 	ctx->switches = switches;
@@ -41,7 +42,6 @@ my_context_new(const char *name, int **sorted, double quantum, double *workTime,
 static void
 my_context_delete(struct my_context *ctx)
 {
-	free(ctx->name);
 	free(ctx);
 }
 
@@ -53,15 +53,31 @@ coroutine_func_f(void *context)
 	double *workTime = ctx->workTime;
 	// start timer
 	clock_gettime(CLOCK_MONOTONIC, &ctx->start);
-	int **sorted = ctx->sorted;
+
+	int files = ctx->files;
+	char ***filenames = ctx->filenames;
+
+	int ***sortedFiles = ctx->sortedFiles;
 	int *switches = ctx->switches;
 
-	char *input = readFile(ctx->name);
-	int *numbers = parseNumbers(input);
-	sorted[0] = mergeSort(numbers, ctx);
+	for (int i = 0; i < files; i++)
+	{
+		if ((*filenames)[i] == NULL)
+		{
+			continue;
+		}
+		char *filename = (*filenames)[i];
+		(*filenames)[i] = NULL;
 
-	free(numbers);
-	free(input);
+		char *input = readFile(filename);
+		int *numbers = parseNumbers(input);
+		(*sortedFiles)[i] = mergeSort(numbers, ctx);
+
+		free(numbers);
+		free(input);
+		// free(filename);
+	}
+
 	*switches = coro_switch_count(this);
 	struct timespec end;
 	clock_gettime(CLOCK_MONOTONIC, &end);
@@ -76,15 +92,21 @@ int main(int argc, char **argv)
 	struct timespec totalWorkTimeStart;
 	clock_gettime(CLOCK_MONOTONIC, &totalWorkTimeStart);
 	int T = atof(argv[1]);
-	int *sortedFiles[argc - 1];
-	double workTime[argc - 1];
-	int switches[argc - 1];
+	int coroutines = atoi(argv[2]);
+	int **sortedFiles = malloc(sizeof(int *) * (argc - 3));
+	char **filenames = malloc(sizeof(char *) * (argc - 3));
+	double workTime[coroutines];
+	int switches[coroutines];
+
+	for (int i = 3; i < argc; i++)
+	{
+		filenames[i - 3] = argv[i];
+	}
 
 	coro_sched_init();
-	for (int i = 2; i < argc; i++)
+	for (int i = 0; i < coroutines; i++)
 	{
-		char *filename = argv[i];
-		coro_new(coroutine_func_f, my_context_new(filename, &sortedFiles[i - 2], T / (argc - 2.0), &workTime[i - 2], &switches[i - 2]));
+		coro_new(coroutine_func_f, my_context_new(argc - 3, &filenames, &sortedFiles, T / (argc - 2.0), &workTime[i], &switches[i]));
 	}
 
 	struct coro *c;
@@ -93,7 +115,7 @@ int main(int argc, char **argv)
 		coro_delete(c);
 	}
 
-	int *sortedArr = mergeSortArrays(sortedFiles, argc - 2);
+	int *sortedArr = mergeSortArrays(sortedFiles, argc - 3);
 	int *writeArr = malloc(sizeof(int) * (sortedArr[0]));
 	for (int i = 0; i < sortedArr[0]; i++)
 	{
@@ -101,23 +123,26 @@ int main(int argc, char **argv)
 	}
 	writeFile("result.txt", writeArr, sortedArr[0]);
 
-	if (argc > 3)
+	if (argc > 4)
 		free(sortedArr);
 	free(writeArr);
-	for (int i = 2; i < argc; i++)
+	for (int i = 0; i < argc - 3; i++)
 	{
-		free(sortedFiles[i - 2]);
+		free(sortedFiles[i]);
+		free(filenames[i]);
 	}
+	free(filenames);
+	free(sortedFiles);
 
 	struct timespec totalWorkTimeEnd;
 	clock_gettime(CLOCK_MONOTONIC, &totalWorkTimeEnd);
 	double totalWorkTime = 1000000.0 * totalWorkTimeEnd.tv_sec + 1e-3 * totalWorkTimeEnd.tv_nsec - (1000000.0 * totalWorkTimeStart.tv_sec + 1e-3 * totalWorkTimeStart.tv_nsec);
 	printf("Total work time: %f seconds\n", totalWorkTime / 1000000.0);
-	for (int i = 2; i < argc; i++)
+	for (int i = 0; i < coroutines; i++)
 	{
-		printf("Coroutine #%d: \n", i - 1);
-		printf("\tWork Time: %f seconds\n", workTime[i - 2] / 1000000.0);
-		printf("\tSwitches: %d\n", switches[i - 2]);
+		printf("Coroutine #%d: \n", i + 1);
+		printf("\tWork Time: %f seconds\n", workTime[i] / 1000000.0);
+		printf("\tSwitches: %d\n", switches[i]);
 	}
 
 	return 0;
