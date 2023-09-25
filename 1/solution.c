@@ -50,7 +50,7 @@ coroutine_func_f(void *context)
 {
 	struct coro *this = coro_this();
 	struct my_context *ctx = context;
-
+	double *workTime = ctx->workTime;
 	// start timer
 	clock_gettime(CLOCK_MONOTONIC, &ctx->start);
 	int **sorted = ctx->sorted;
@@ -63,6 +63,10 @@ coroutine_func_f(void *context)
 	free(numbers);
 	free(input);
 	*switches = coro_switch_count(this);
+	struct timespec end;
+	clock_gettime(CLOCK_MONOTONIC, &end);
+	double x = 1000000.0 * end.tv_sec + 1e-3 * end.tv_nsec - (1000000.0 * ctx->start.tv_sec + 1e-3 * ctx->start.tv_nsec);
+	*workTime += x;
 	my_context_delete(ctx);
 	return 0;
 }
@@ -244,10 +248,10 @@ static int *mergeSort(int *numbers, void *context)
 		double x = 1000000.0 * end.tv_sec + 1e-3 * end.tv_nsec - (1000000.0 * ctx->start.tv_sec + 1e-3 * ctx->start.tv_nsec);
 		if (x > ctx->quantum) // check if time elapsed is greater than quantum
 		{
+			*workTime += x;
 			// yield and restart timer
 			coro_yield();
 			clock_gettime(CLOCK_MONOTONIC, &ctx->start);
-			*workTime += x;
 		}
 
 		free(left);
