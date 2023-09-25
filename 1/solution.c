@@ -243,6 +243,13 @@ static int *mergeSort(int *numbers, void *context)
 		int *sortedRight = mergeSort(right, ctx);
 		int *sorted = merge(sortedLeft, sortedRight);
 
+		free(left);
+		free(right);
+		if (mid > 1)
+			free(sortedLeft);
+		if (size - mid > 1)
+			free(sortedRight);
+
 		struct timespec end;
 		clock_gettime(CLOCK_MONOTONIC, &end);
 		double x = 1000000.0 * end.tv_sec + 1e-3 * end.tv_nsec - (1000000.0 * ctx->start.tv_sec + 1e-3 * ctx->start.tv_nsec);
@@ -253,13 +260,6 @@ static int *mergeSort(int *numbers, void *context)
 			coro_yield();
 			clock_gettime(CLOCK_MONOTONIC, &ctx->start);
 		}
-
-		free(left);
-		free(right);
-		if (mid > 1)
-			free(sortedLeft);
-		if (size - mid > 1)
-			free(sortedRight);
 		return sorted;
 	}
 	return NULL;
