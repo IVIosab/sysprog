@@ -75,7 +75,6 @@ coroutine_func_f(void *context)
 
 		free(numbers);
 		free(input);
-		// free(filename);
 	}
 
 	*switches = coro_switch_count(this);
