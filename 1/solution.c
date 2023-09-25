@@ -21,15 +21,19 @@ struct my_context
 	int **sorted;		   // pointer to sorted array of the file
 	double quantum;		   // T/N , stored in microseconds
 	struct timespec start; // start time of the coroutine
+	double *workTime;
+	int *switches;
 };
 
 static struct my_context *
-my_context_new(const char *name, int **sorted, double quantum)
+my_context_new(const char *name, int **sorted, double quantum, double *workTime, int *switches)
 {
 	struct my_context *ctx = malloc(sizeof(*ctx));
 	ctx->name = strdup(name);
 	ctx->sorted = sorted;
 	ctx->quantum = quantum;
+	ctx->workTime = workTime;
+	ctx->switches = switches;
 
 	return ctx;
 }
@@ -44,12 +48,13 @@ my_context_delete(struct my_context *ctx)
 static int
 coroutine_func_f(void *context)
 {
-	// struct coro *this = coro_this();
+	struct coro *this = coro_this();
 	struct my_context *ctx = context;
 
 	// start timer
 	clock_gettime(CLOCK_MONOTONIC, &ctx->start);
 	int **sorted = ctx->sorted;
+	int *switches = ctx->switches;
 
 	char *input = readFile(ctx->name);
 	int *numbers = parseNumbers(input);
@@ -57,21 +62,25 @@ coroutine_func_f(void *context)
 
 	free(numbers);
 	free(input);
+	*switches = coro_switch_count(this);
 	my_context_delete(ctx);
-	// printf("coroutine switch count: %lld\n", coro_switch_count(this));
 	return 0;
 }
 
 int main(int argc, char **argv)
 {
+	struct timespec totalWorkTimeStart;
+	clock_gettime(CLOCK_MONOTONIC, &totalWorkTimeStart);
 	int T = atof(argv[1]);
 	int *sortedFiles[argc - 1];
-	coro_sched_init();
+	double workTime[argc - 1];
+	int switches[argc - 1];
 
+	coro_sched_init();
 	for (int i = 2; i < argc; i++)
 	{
 		char *filename = argv[i];
-		coro_new(coroutine_func_f, my_context_new(filename, &sortedFiles[i - 2], T / (argc - 2.0)));
+		coro_new(coroutine_func_f, my_context_new(filename, &sortedFiles[i - 2], T / (argc - 2.0), &workTime[i - 2], &switches[i - 2]));
 	}
 
 	struct coro *c;
@@ -94,6 +103,17 @@ int main(int argc, char **argv)
 	for (int i = 2; i < argc; i++)
 	{
 		free(sortedFiles[i - 2]);
+	}
+
+	struct timespec totalWorkTimeEnd;
+	clock_gettime(CLOCK_MONOTONIC, &totalWorkTimeEnd);
+	double totalWorkTime = 1000000.0 * totalWorkTimeEnd.tv_sec + 1e-3 * totalWorkTimeEnd.tv_nsec - (1000000.0 * totalWorkTimeStart.tv_sec + 1e-3 * totalWorkTimeStart.tv_nsec);
+	printf("Total work time: %f seconds\n", totalWorkTime / 1000000.0);
+	for (int i = 2; i < argc; i++)
+	{
+		printf("Coroutine #%d: \n", i - 1);
+		printf("\tWork Time: %f seconds\n", workTime[i - 2] / 1000000.0);
+		printf("\tSwitches: %d\n", switches[i - 2]);
 	}
 
 	return 0;
@@ -194,6 +214,7 @@ static int *merge(int *a, int *b)
 static int *mergeSort(int *numbers, void *context)
 {
 	struct my_context *ctx = context;
+	double *workTime = ctx->workTime;
 	int size = numbers[0];
 	if (size == 1)
 	{
@@ -226,6 +247,7 @@ static int *mergeSort(int *numbers, void *context)
 			// yield and restart timer
 			coro_yield();
 			clock_gettime(CLOCK_MONOTONIC, &ctx->start);
+			*workTime += x;
 		}
 
 		free(left);
