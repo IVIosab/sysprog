@@ -4,6 +4,7 @@
 #include <limits.h>
 #include <string.h>
 #define NEED_OPEN_FLAGS
+#define NEED_RESIZE
 
 static void
 test_open(void)
@@ -418,7 +419,6 @@ test_resize(void)
 	unit_fail_if(rc != 3);
 	unit_fail_if(ufs_close(fd2) != 0);
 	unit_fail_if(ufs_delete("file2") != 0);
-
 	rc = ufs_write(fd, buffer, sizeof(buffer));
 	unit_check(rc == sizeof(buffer),
 			   "opened descriptor beyond new border still works");

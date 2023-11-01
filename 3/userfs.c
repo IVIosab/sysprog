@@ -331,6 +331,104 @@ int ufs_delete(const char *filename)
 	return -1;
 }
 
+int ufs_resize(int fd, size_t new_size)
+{
+	if (fd < 0 || fd >= file_descriptor_capacity || file_descriptors[fd] == NULL || file_descriptors[fd]->file == NULL || file_descriptors[fd]->file->refs == 0)
+	{
+		ufs_error_code = UFS_ERR_NO_FILE;
+		return -1;
+	}
+
+	struct filedesc *filedesc = file_descriptors[fd];
+	struct file *file = filedesc->file;
+	struct block *block = file->block_list;
+
+	if (filedesc->flags & UFS_READ_ONLY)
+	{
+		ufs_error_code = UFS_ERR_NO_PERMISSION;
+		return -1;
+	}
+
+	if (new_size > MAX_FILE_SIZE)
+	{
+		ufs_error_code = UFS_ERR_NO_MEM;
+		return -1;
+	}
+
+	size_t old_size = filedesc->bytes_position;
+	for (int i = 0; i < file_descriptor_capacity; i++)
+	{
+		if (file_descriptors[i] != NULL && file_descriptors[i]->file == file)
+		{
+			if (file_descriptors[i]->bytes_position > (int)old_size)
+			{
+				old_size = file_descriptors[i]->bytes_position;
+			}
+		}
+	}
+
+	if (new_size < old_size)
+	{
+		for (size_t i = 0; i < new_size / BLOCK_SIZE; i++)
+		{
+			block = block->next;
+		}
+		struct block *next = block->next;
+		block->next = NULL;
+		while (next != NULL)
+		{
+			struct block *next_next = next->next;
+			free(next->memory);
+			free(next);
+			next = next_next;
+		}
+
+		block->occupied = new_size % BLOCK_SIZE;
+		if (block->occupied == 0)
+		{
+			block->occupied = BLOCK_SIZE;
+		}
+		file->last_block = block;
+	}
+
+	for (int i = 0; i < file_descriptor_capacity; i++)
+	{
+		if (file_descriptors[i] != NULL && file_descriptors[i]->file == file)
+		{
+			if (file_descriptors[i]->bytes_position > (int)new_size)
+			{
+				file_descriptors[i]->bytes_position = new_size;
+			}
+		}
+	}
+
+	return 0;
+}
+
 void ufs_destroy(void)
 {
+	for (int i = 0; i < file_descriptor_capacity; i++)
+	{
+		if (file_descriptors[i] != NULL)
+		{
+			ufs_close(i);
+		}
+	}
+	free(file_descriptors);
+	struct file *file = file_list;
+	while (file != NULL)
+	{
+		struct file *next = file->next;
+		free(file->name);
+		struct block *block = file->block_list;
+		while (block != NULL)
+		{
+			struct block *next = block->next;
+			free(block->memory);
+			free(block);
+			block = next;
+		}
+		free(file);
+		file = next;
+	}
 }
