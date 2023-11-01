@@ -3,12 +3,13 @@
 #include <assert.h>
 #include <limits.h>
 #include <string.h>
+#define NEED_OPEN_FLAGS
 
 static void
 test_open(void)
 {
 	unit_test_start();
-	
+
 	int fd = ufs_open("file", 0);
 	unit_check(fd == -1, "error when no such file");
 	unit_check(ufs_errno() == UFS_ERR_NO_FILE, "errno is 'no_file'");
@@ -46,7 +47,8 @@ test_stress_open(void)
 	int fd[count][2];
 	char name[16], buf[16];
 	unit_msg("open %d read and write descriptors, fill with data", count);
-	for (int i = 0; i < count; ++i) {
+	for (int i = 0; i < count; ++i)
+	{
 		int name_len = sprintf(name, "file%d", i) + 1;
 		int *in = &fd[i][0], *out = &fd[i][1];
 		*in = ufs_open(name, UFS_CREATE);
@@ -56,7 +58,8 @@ test_stress_open(void)
 		unit_fail_if(rc != name_len);
 	}
 	unit_msg("read the data back");
-	for (int i = 0; i < count; ++i) {
+	for (int i = 0; i < count; ++i)
+	{
 		int name_len = sprintf(name, "file%d", i) + 1;
 		int *in = &fd[i][0], *out = &fd[i][1];
 		ssize_t rc = ufs_read(*in, buf, sizeof(buf));
@@ -120,7 +123,7 @@ test_io(void)
 
 	char buffer[2048];
 	unit_check(ufs_write(fd1, "123###", 3) == 3,
-		"data (only needed) is written");
+			   "data (only needed) is written");
 	unit_check(ufs_read(fd2, buffer, sizeof(buffer)) == 3, "data is read");
 	unit_check(memcmp(buffer, "123", 3) == 0, "the same data");
 
@@ -153,15 +156,21 @@ test_io(void)
 	 */
 	fd1 = ufs_open("file", 0);
 	unit_fail_if(fd1 == -1);
-	unit_check(ufs_write(fd1, "1\0" "2\0" "3\0", 6) == 6,
-		"data with zeros");
+	unit_check(ufs_write(fd1, "1\0"
+							  "2\0"
+							  "3\0",
+						 6) == 6,
+			   "data with zeros");
 	ufs_close(fd1);
 	fd1 = ufs_open("file", 0);
 	unit_fail_if(fd1 == -1);
 	unit_check(ufs_read(fd1, buffer, 6) == 6,
-		"read data with zeros");
-	unit_check(memcmp(buffer, "1\0" "2\0" "3\0", 6) == 0,
-		"check with zeros");
+			   "read data with zeros");
+	unit_check(memcmp(buffer, "1\0"
+							  "2\0"
+							  "3\0",
+					  6) == 0,
+			   "check with zeros");
 	ufs_close(fd1);
 	/*
 	 * Write multiple blocks.
@@ -173,7 +182,8 @@ test_io(void)
 	fd1 = ufs_open("file", 0);
 	unit_fail_if(fd1 == -1);
 	size_t progress = 0;
-	while (progress < some_size) {
+	while (progress < some_size)
+	{
 		ssize_t to_write = progress % 123 + 1;
 		if (to_write + progress > some_size)
 			to_write = some_size - progress;
@@ -190,7 +200,8 @@ test_io(void)
 	fd1 = ufs_open("file", 0);
 	unit_fail_if(fd1 == -1);
 	progress = 0;
-	while (progress < some_size) {
+	while (progress < some_size)
+	{
 		size_t to_read = progress % 123 + 1;
 		/*
 		 * If to read + progress > size, it should be fine. Reading will
@@ -225,7 +236,7 @@ test_delete(void)
 	unit_fail_if(fd1 == -1 || fd2 == -1 || fd3 == -1);
 
 	unit_check(ufs_delete("file") == 0,
-		   "delete when opened descriptors exist");
+			   "delete when opened descriptors exist");
 
 	int tmp = ufs_open("tmp", UFS_CREATE);
 	unit_fail_if(tmp == -1);
@@ -233,26 +244,26 @@ test_delete(void)
 	ufs_close(tmp);
 
 	unit_check(ufs_write(fd2, "a", 1) == 1,
-		   "write into an fd opened before deletion");
+			   "write into an fd opened before deletion");
 	unit_check(ufs_read(fd3, &c1, 1) == 1,
-		   "read from another opened fd - it sees the data");
+			   "read from another opened fd - it sees the data");
 	unit_check(c1 == 'a', "exactly the same data");
 	unit_check(ufs_write(fd3, "bc", 2) == 2,
-		   "write into it and the just read data is not overwritten");
+			   "write into it and the just read data is not overwritten");
 
 	unit_check(ufs_read(fd1, &c1, 1) == 1, "read from the first one");
 	unit_check(ufs_read(fd1, &c2, 1) == 1, "read from the first one again");
 	unit_check(c1 == 'a' && c2 == 'b', "it reads data in correct order");
 
 	int fd4 = ufs_open("file", 0);
-	unit_check(fd4 == -1, "the existing 'ghost' file is not visible "\
-		   "anymore for new opens");
+	unit_check(fd4 == -1, "the existing 'ghost' file is not visible "
+						  "anymore for new opens");
 	unit_check(ufs_errno() == UFS_ERR_NO_FILE, "errno is set");
 
 	fd4 = ufs_open("file", UFS_CREATE);
 	unit_fail_if(fd4 == -1);
 	unit_check(ufs_read(fd4, &c1, 1) == 0,
-		   "the file is created back, no data");
+			   "the file is created back, no data");
 	unit_check(ufs_read(fd1, &c2, 1) == 1, "but the ghost still lives");
 	unit_check(c2 == 'c', "and gives correct data");
 
@@ -277,22 +288,24 @@ test_max_file_size(void)
 	unit_fail_if(fd == -1);
 
 	int buf_size = 1024 * 1024;
-	char *buf = (char *) malloc(buf_size);
+	char *buf = (char *)malloc(buf_size);
 	for (int i = 0; i < buf_size; ++i)
 		buf[i] = 'a' + i % 26;
-	for (int i = 0; i < 100; ++i) {
+	for (int i = 0; i < 100; ++i)
+	{
 		ssize_t rc = ufs_write(fd, buf, buf_size);
 		unit_fail_if(rc != buf_size);
 	}
 	unit_check(ufs_write(fd, "a", 1) == -1,
-		   "can not write over max file size");
+			   "can not write over max file size");
 	unit_check(ufs_errno() == UFS_ERR_NO_MEM, "errno is set");
 
 	unit_fail_if(ufs_close(fd) != 0);
 	fd = ufs_open("file", 0);
 	unit_fail_if(fd == -1);
-	char *buf2 = (char *) malloc(buf_size);
-	for (int i = 0; i < 100; ++i) {
+	char *buf2 = (char *)malloc(buf_size);
+	for (int i = 0; i < 100; ++i)
+	{
 		ssize_t rc = ufs_read(fd, buf2, buf_size);
 		unit_fail_if(rc != buf_size);
 		unit_fail_if(memcmp(buf2, buf, buf_size) != 0);
@@ -337,9 +350,9 @@ test_rights(void)
 	unit_check(ufs_write(fd, "bad", 4) == -1, "can not write");
 	unit_check(ufs_errno() == UFS_ERR_NO_PERMISSION, "errno is set");
 	unit_check(ufs_read(fd, buf2, sizeof(buf2)) == buf1_size,
-		   "can again read");
+			   "can again read");
 	unit_check(memcmp(buf1, buf2, buf1_size) == 0,
-		   "and data was not overwritten");
+			   "and data was not overwritten");
 	unit_fail_if(ufs_close(fd) != 0);
 
 	fd = ufs_open("file", UFS_WRITE_ONLY);
@@ -408,7 +421,7 @@ test_resize(void)
 
 	rc = ufs_write(fd, buffer, sizeof(buffer));
 	unit_check(rc == sizeof(buffer),
-		   "opened descriptor beyond new border still works");
+			   "opened descriptor beyond new border still works");
 	unit_fail_if(ufs_close(fd) != 0);
 	unit_fail_if(ufs_delete("file") != 0);
 	/*
@@ -432,7 +445,7 @@ test_resize(void)
 	rc = ufs_read(fd2, buffer, sizeof(buffer));
 	unit_fail_if(rc != 8);
 	unit_check(memcmp(buffer, "aaaafter", 8) == 0,
-		"descriptor was affected by resize and still works");
+			   "descriptor was affected by resize and still works");
 	unit_fail_if(ufs_close(fd2) != 0);
 	unit_fail_if(ufs_close(fd) != 0);
 	unit_fail_if(ufs_delete("file") != 0);
@@ -441,8 +454,7 @@ test_resize(void)
 #endif
 }
 
-int
-main(void)
+int main(void)
 {
 	unit_test_start();
 

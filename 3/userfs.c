@@ -162,6 +162,12 @@ ufs_write(int fd, const char *buf, size_t size)
 	struct file *file = filedesc->file;
 	struct block *block = file->block_list;
 
+	if (filedesc->flags & UFS_READ_ONLY)
+	{
+		ufs_error_code = UFS_ERR_NO_PERMISSION;
+		return -1;
+	}
+
 	if (filedesc->bytes_position + size > MAX_FILE_SIZE)
 	{
 		ufs_error_code = UFS_ERR_NO_MEM;
@@ -225,6 +231,13 @@ ufs_read(int fd, char *buf, size_t size)
 	struct filedesc *filedesc = file_descriptors[fd];
 	struct file *file = filedesc->file;
 	struct block *block = file->block_list;
+
+	if (filedesc->flags & UFS_WRITE_ONLY)
+	{
+		ufs_error_code = UFS_ERR_NO_PERMISSION;
+		return -1;
+	}
+
 	for (int i = 0; i < filedesc->bytes_position / BLOCK_SIZE; i++)
 	{
 		block = block->next;
