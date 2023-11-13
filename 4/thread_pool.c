@@ -328,7 +328,7 @@ int thread_task_timed_join(struct thread_task *task, double timeout, void **resu
 
 	// Calculate the absolute time for the timeout
 	struct timespec timeout_time;
-	clock_gettime(CLOCK_MONOTONIC, &timeout_time);
+	clock_gettime(CLOCK_REALTIME, &timeout_time);
 	long seconds = (long)timeout;
 	long nanoseconds = (long)((timeout - seconds) * 1e9);
 	timeout_time.tv_sec += seconds;
@@ -345,7 +345,7 @@ int thread_task_timed_join(struct thread_task *task, double timeout, void **resu
 	while (task->state != TASK_STATE_FINISHED)
 	{
 		struct timespec current_time;
-		clock_gettime(CLOCK_MONOTONIC, &current_time);
+		clock_gettime(CLOCK_REALTIME, &current_time);
 		seconds = current_time.tv_sec - timeout_time.tv_sec;
 		nanoseconds = current_time.tv_nsec - timeout_time.tv_nsec;
 		if (current_time.tv_sec > timeout_time.tv_sec || (current_time.tv_sec == timeout_time.tv_sec && current_time.tv_nsec >= timeout_time.tv_nsec))
