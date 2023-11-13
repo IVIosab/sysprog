@@ -314,6 +314,7 @@ int ufs_delete(const char *filename)
 					file_list = file->next;
 				}
 				free(file->name);
+				file->name = NULL; // Set pointer to NULL after freeing
 				struct block *block = file->block_list;
 				while (block != NULL)
 				{
@@ -324,6 +325,7 @@ int ufs_delete(const char *filename)
 					block = next;
 				}
 				free(file);
+				file = NULL; // Set pointer to NULL after freeing
 				return 0;
 			}
 		}
@@ -455,19 +457,24 @@ void ufs_destroy(void)
 		if (file_descriptors[i] != NULL)
 		{
 			ufs_close(i);
+			file_descriptors[i] = NULL; // Set pointer to NULL after freeing
 		}
 	}
 	free(file_descriptors);
+	file_descriptors = NULL; // Set pointer to NULL after freeing
+
 	struct file *file = file_list;
 	while (file != NULL)
 	{
 		struct file *next = file->next;
 		free(file->name);
+		file->name = NULL; // Set pointer to NULL after freeing
 		struct block *block = file->block_list;
 		while (block != NULL)
 		{
 			struct block *next = block->next;
 			free(block->memory);
+			block->memory = NULL; // Set pointer to NULL after freeing
 			free(block);
 			block = next;
 		}
